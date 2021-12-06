@@ -60,7 +60,7 @@ fn main() {
 
 struct World {
     creatures: Vec<Creature>,
-    grid: Vec<Vec<Option<usize>>>,
+    grid: Vec<Option<usize>>,
     width: usize,
     height: usize,
 }
@@ -68,30 +68,22 @@ struct World {
 impl World {
     pub fn new(mut creatures: Vec<Creature>, height: usize, width: usize) -> World {
         let mut rng = rand::thread_rng();
+        let size = width * height;
 
-        let mut grid: Vec<Vec<Option<usize>>> = (0..width)
-            .step_by(1)
-            .map(|_| (0..height).step_by(1).map(|_| None).collect())
-            .collect();
+        let mut grid: Vec<Option<usize>> = (0..size).step_by(1).map(|_| None).collect();
 
         for (ix, creature) in creatures.iter_mut().enumerate() {
-            let (mut x, mut y) = (
-                rng.next_u32() as usize % width,
-                rng.next_u32() as usize % height,
-            );
+            let mut i = rng.next_u32() as usize % size;
 
-            while !grid[x][y].is_none() {
-                x = rng.next_u32() as usize % width;
-                y = rng.next_u32() as usize % height;
+            while !grid[i].is_none() {
+                i = rng.next_u32() as usize % size;
             }
 
-            if grid[x][y].is_none() {
-                creature.position = Position {
-                    x: x as i16,
-                    y: y as i16,
-                };
-                grid[x][y] = Some(ix);
-            }
+            creature.position = Position {
+                x: (i % height) as i16,
+                y: (i / height) as i16,
+            };
+            grid[i] = Some(ix);
         }
 
         World {
@@ -133,18 +125,22 @@ impl World {
             );
 
         for kill in kills {
-            if let Some(ix) = self.grid[kill.x as usize][kill.y as usize] {
+            let i = self.position_to_grid_index(&kill);
+            if let Some(ix) = self.grid[i] {
                 self.creatures[ix].alive = false;
-                self.grid[kill.x as usize][kill.y as usize] = None;
+                self.grid[i] = None;
             }
         }
 
         for (source, destination) in moves {
-            if self.grid[destination.x as usize][destination.y as usize].is_none() {
-                if let Some(ix) = self.grid[source.x as usize][source.y as usize] {
+            let dst = self.position_to_grid_index(&destination);
+            if self.grid[dst].is_none() {
+                let src = self.position_to_grid_index(&source);
+
+                if let Some(ix) = self.grid[src] {
                     if self.creatures[ix].alive {
-                        self.grid[source.x as usize][source.y as usize] = None;
-                        self.grid[destination.x as usize][destination.y as usize] = Some(ix);
+                        self.grid[src] = None;
+                        self.grid[dst] = Some(ix);
                         self.creatures[ix].set_position(destination);
                     }
                 }
@@ -153,8 +149,18 @@ impl World {
     }
 
     #[inline]
+    fn position_to_grid_index(&self, position: &Position) -> usize {
+        self.get_grid_index(position.x as usize, position.y as usize)
+    }
+
+    #[inline]
+    fn get_grid_index(&self, x: usize, y: usize) -> usize {
+        x + y * self.width
+    }
+
+    #[inline]
     pub fn is_empty(&self, position: &Position) -> bool {
-        self.grid[position.x as usize][position.y as usize].is_none()
+        self.grid[self.position_to_grid_index(position)].is_none()
     }
 
     #[inline]
@@ -177,7 +183,6 @@ impl World {
         };
         let maxx = usize::min(self.width - 1, position.x as usize + radius);
 
-
         let miny = if position.y as usize > radius {
             position.y as usize - radius
         } else {
@@ -187,7 +192,7 @@ impl World {
 
         (minx..maxx)
             .zip(miny..maxy)
-            .filter(|(x, y)| self.grid[*x][*y].is_some())
+            .filter(|(x, y)| self.grid[self.get_grid_index(*x, *y)].is_some())
             .count()
     }
 }
