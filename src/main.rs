@@ -18,8 +18,8 @@ fn main() {
 
     let mut world = World::new(creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
 
-    for generation in 0..100 {
-        for i in 0..1000 {
+    for generation in 0..10 {
+        for _ in 0..100 {
             world.step();
         }
         let killed = world.creatures.iter().filter(|c| !c.alive).count();
