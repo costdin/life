@@ -359,7 +359,7 @@ impl Creature {
             );
 
         let mut results = vec![];
-        if kill > 0.5 {
+        if kill > 10000. {
             let kill_position = &self.position + self.last_move.as_ref();
 
             if world.is_position_in_bounds(&kill_position) && !world.is_empty(&kill_position) {
@@ -392,6 +392,7 @@ impl Creature {
             SensorType::Density => world.get_neighborhood(&self.position, 3) as f64,
             SensorType::Random => thread_rng().gen::<f64>(),
             SensorType::Barrier => 0.,
+            SensorType::Oscillator => (self.age as f64 / 10.).sin()
         }
     }
 }
@@ -427,11 +428,12 @@ enum SensorType {
     Density,
     Random,
     Barrier,
+    Oscillator
 }
 
 impl From<u8> for SensorType {
     fn from(item: u8) -> SensorType {
-        match item % 10 {
+        match item % 11 {
             0 => SensorType::Age,
             1 => SensorType::NorthBoundaryDistance,
             2 => SensorType::EastBoundaryDistance,
@@ -442,6 +444,7 @@ impl From<u8> for SensorType {
             7 => SensorType::Density,
             8 => SensorType::Random,
             9 => SensorType::Barrier,
+            10 => SensorType::Oscillator,
             _ => unreachable!(),
         }
     }
