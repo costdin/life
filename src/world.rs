@@ -17,6 +17,7 @@ pub struct World {
     grid: Vec<Option<usize>>,
     pub width: usize,
     pub height: usize,
+    pub age: usize,
 }
 
 impl World {
@@ -62,6 +63,7 @@ impl World {
             grid,
             width,
             height,
+            age: 0,
         }
     }
 
@@ -132,6 +134,8 @@ impl World {
                 }
             }
         }
+
+        self.age += 1;
     }
 
     #[inline]

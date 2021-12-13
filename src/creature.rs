@@ -2,6 +2,7 @@ use rand::prelude::*;
 use rand::prelude::*;
 use std::f64::consts::PI;
 use std::ops::Add;
+use std::ptr::addr_of_mut;
 
 use super::world::*;
 
@@ -116,7 +117,10 @@ impl Creature {
                     connections.push((input_ix, output_ix, weight as f64 / 16000. + w))
                 }
             } else {*/
-            connections.push((input_ix, output_ix, weight as f64 / 8000. - 4.));
+            unsafe {
+                connections.push((input_ix, output_ix, weight as f64 / 8000. - 4.));
+                //connections.push((addr_of_mut!(neurons[input_ix]), addr_of_mut!(neurons[output_ix]), weight as f64 / 8000. - 4.));
+            }
             //}
 
             last_input_ix = input_ix;
@@ -148,6 +152,7 @@ impl Creature {
         let mut add = vec![0.; self.neurons.len()];
 
         for connection in self.connections.iter() {
+            //let neuron = unsafe { *connection.0 };
             let neuron = &self.neurons[connection.0];
 
             add[connection.1] += match &neuron {
@@ -157,78 +162,127 @@ impl Creature {
             }
         }
 
-        let (kill, x, y, responsiveness) = add
-            .into_iter()
-            .zip(&self.neurons)
-            .filter_map(|(add, n)| {
-                if let Neuron::Action(a) = n {
-                    Some((n.activate(add), a))
-                } else {
-                    None
+                let xxxxx = add
+                    .into_iter()
+                    .zip(&self.neurons)
+                    .filter_map(|(add, n)| {
+                        if let Neuron::Action(a) = n {
+                            Some((n.activate(add), a))
+                        } else {
+                            None
+                        }
+                    });
+
+                let mut move_x = 0.;
+                let mut move_y = 0.;
+                let mut kill = 0.;
+                let mut responsiveness = None;
+                for (intensity, action) in xxxxx {
+                    match action {
+                        ActionType::Move(d) => {
+                            move_x += d.x() * intensity;
+                            move_y += d.y() * intensity;
+                        }
+                        ActionType::MoveForward if self.last_move.is_some() => {
+                            move_x += self.last_move.as_ref().unwrap().x() * intensity;
+                            move_y += self.last_move.as_ref().unwrap().y() * intensity;
+                        }
+                        ActionType::Kill if self.last_move.is_some() => {
+                            kill += intensity
+                        }
+                        ActionType::MoveLeft if self.last_move.is_some() => {
+                            let rotated = self.last_move.as_ref().unwrap().left();
+
+                            move_x += rotated.x() * intensity;
+                            move_y += rotated.y() * intensity;
+                        }
+
+                        ActionType::MoveRight if self.last_move.is_some() => {
+                            let rotated = self.last_move.as_ref().unwrap().right();
+
+                            move_x += rotated.x() * intensity;
+                            move_y += rotated.y() * intensity;
+                        }
+                        ActionType::MoveRandom => {
+                            let mv = Direction::random();
+
+                            move_x += mv.x() * intensity;
+                            move_x += mv.y() * intensity;
+                        }
+                        ActionType::SetResponsiveness => {
+                            responsiveness = Some((intensity.tanh() + 1.) / 2.);
+                        }
+                        ActionType::MoveForward
+                        | ActionType::Kill
+                        | ActionType::MoveLeft
+                        | ActionType::MoveRight => { },
+                    }
                 }
-            })
-            .fold(
-                (0., 0., 0., None),
-                |(kill, move_x, move_y, responsiveness), (intensity, action)| match action {
-                    ActionType::Move(d) => (
-                        kill,
-                        move_x + d.x() * intensity,
-                        move_y + d.y() * intensity,
-                        responsiveness,
-                    ),
-                    ActionType::MoveForward if self.last_move.is_some() => (
-                        kill,
-                        move_x + self.last_move.as_ref().unwrap().x() * intensity,
-                        move_y + self.last_move.as_ref().unwrap().y() * intensity,
-                        responsiveness,
-                    ),
-                    ActionType::Kill if self.last_move.is_some() => {
-                        (kill + intensity, move_x, move_y, responsiveness)
-                    }
-                    ActionType::MoveLeft if self.last_move.is_some() => {
-                        let rotated = self.last_move.as_ref().unwrap().left();
+                /*
+                let (kill, x, y, responsiveness) = xxxxx
+                    .into_iter()
+                    .fold(
+                        (0., 0., 0., None),
+                        |(kill, move_x, move_y, responsiveness), (intensity, action)| match action {
+                            ActionType::Move(d) => (
+                                kill,
+                                move_x + d.x() * intensity,
+                                move_y + d.y() * intensity,
+                                responsiveness,
+                            ),
+                            ActionType::MoveForward if self.last_move.is_some() => (
+                                kill,
+                                move_x + self.last_move.as_ref().unwrap().x() * intensity,
+                                move_y + self.last_move.as_ref().unwrap().y() * intensity,
+                                responsiveness,
+                            ),
+                            ActionType::Kill if self.last_move.is_some() => {
+                                (kill + intensity, move_x, move_y, responsiveness)
+                            }
+                            ActionType::MoveLeft if self.last_move.is_some() => {
+                                let rotated = self.last_move.as_ref().unwrap().left();
 
-                        (
-                            kill,
-                            move_x + rotated.x() * intensity,
-                            move_y + rotated.y() * intensity,
-                            responsiveness,
-                        )
-                    }
-                    ActionType::MoveRight if self.last_move.is_some() => {
-                        let rotated = self.last_move.as_ref().unwrap().right();
+                                (
+                                    kill,
+                                    move_x + rotated.x() * intensity,
+                                    move_y + rotated.y() * intensity,
+                                    responsiveness,
+                                )
+                            }
+                            ActionType::MoveRight if self.last_move.is_some() => {
+                                let rotated = self.last_move.as_ref().unwrap().right();
 
-                        (
-                            kill,
-                            move_x + rotated.x() * intensity,
-                            move_y + rotated.y() * intensity,
-                            responsiveness,
-                        )
-                    }
-                    ActionType::MoveRandom => {
-                        let mv = Direction::random();
+                                (
+                                    kill,
+                                    move_x + rotated.x() * intensity,
+                                    move_y + rotated.y() * intensity,
+                                    responsiveness,
+                                )
+                            }
+                            ActionType::MoveRandom => {
+                                let mv = Direction::random();
 
-                        (
-                            kill,
-                            mv.x() * intensity,
-                            mv.y() * intensity,
-                            responsiveness,
-                        )
-                    }
-                    ActionType::SetResponsiveness => {
-                        (kill, move_x, move_y, Some((intensity.tanh() + 1.) / 2.))
-                    }
-                    ActionType::MoveForward
-                    | ActionType::Kill
-                    | ActionType::MoveLeft
-                    | ActionType::MoveRight => (kill, move_x, move_y, responsiveness),
-                },
-            );
+                                (
+                                    kill,
+                                    mv.x() * intensity,
+                                    mv.y() * intensity,
+                                    responsiveness,
+                                )
+                            }
+                            ActionType::SetResponsiveness => {
+                                (kill, move_x, move_y, Some((intensity.tanh() + 1.) / 2.))
+                            }
+                            ActionType::MoveForward
+                            | ActionType::Kill
+                            | ActionType::MoveLeft
+                            | ActionType::MoveRight => (kill, move_x, move_y, responsiveness),
+                        },
+                    );*/
 
         let (normalized_kill, px, py) = (
             kill.tanh(),
-            x.tanh() * self.responsiveness,
-            y.tanh() * self.responsiveness,
+            move_x.tanh() * self.responsiveness,
+            move_y.tanh() * self.responsiveness,
         );
 
         let mut results = vec![];
@@ -255,18 +309,20 @@ impl Creature {
             0
         };
 
-        let new_position = &self.position + [mx, my];
+        if (mx, my) != (0, 0) {
+            let new_position = &self.position + [mx, my];
 
-        if world.is_position_in_bounds(&new_position) && world.is_empty(&new_position) {
-            results.push(ActionResult::Move(self.position.clone(), new_position));
+            if world.is_position_in_bounds(&new_position) && world.is_empty(&new_position) {
+                results.push(ActionResult::Move(self.position.clone(), new_position));
+            }
         }
-
+        
         results
     }
 
     fn get_sensor(&self, sensor_type: &SensorType, world: &World) -> f64 {
         match sensor_type {
-            SensorType::Age => (self.age - 125) as f64 / 125.,
+            SensorType::Age => (world.age - 125) as f64 / 125.,
             SensorType::NorthBoundaryDistance => 1. - self.position.y as f64 / world.height as f64,
             SensorType::EastBoundaryDistance => 1. - self.position.x as f64 / world.width as f64,
             SensorType::SouthBoundaryDistance => self.position.y as f64 / world.height as f64,
@@ -276,7 +332,7 @@ impl Creature {
             SensorType::Density => world.get_neighborhood(&self.position, 3) as f64 / 8.,
             SensorType::Random => thread_rng().gen::<f64>(),
             SensorType::Barrier => 0.,
-            SensorType::Oscillator => (self.age as f64 / 10.).sin(),
+            SensorType::Oscillator => (world.age as f64 / 10.).sin(),
             SensorType::DistanceCreatureForward => match self.last_move {
                 Some(m) => {
                     (world.distance_next_creature(&self.position, &m, 20) as f64 - 20.).tanh()

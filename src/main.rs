@@ -8,8 +8,8 @@ use world::*;
 
 const BOX_HEIGHT: i16 = 128;
 const BOX_WIDTH: i16 = 128;
-const GENOME_SIZE: usize = 6;
-const INTERNAL_NEURONS_COUNT: u8 = 2;
+const GENOME_SIZE: usize = 24;
+const INTERNAL_NEURONS_COUNT: u8 = 8;
 const CREATURE_COUNT: usize = 3000;
 
 fn main() {
@@ -36,7 +36,7 @@ fn main() {
 
     let mut world = World::new(creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
 
-    for generation in 0..10 {
+    for generation in 0..10000 {
         for _ in 0..300 {
             if generation % 50 == 0 {
                 //world.display();
