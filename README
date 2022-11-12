@@ -1,0 +1,26 @@
+Simple evolution simulator
+
+Some creatures are put in an area, where they perform some actions. At the end
+of each generations some creatures are selected for survival (in the current
+implementation this is determined by their position) and their genes are used
+to create the next generation.
+
+The creatures have very simple brains with sensory neurons (that give some
+information on the environment), action neurons (that when activated perform
+some action) and intermediate neurons (that connect other neurons).
+
+In the current implementation the creatures can only move or kill each other.
+The sensory neurons are activated based on the distance from the border of the
+area or density of creatures near the individual.
+
+The code is not optimised at all and the project is not finished, there is even
+some commented out code. Possibly the entire approach is not correct, but we
+are doing this for fun. 
+
+Strongly inspired by https://www.youtube.com/watch?v=N3tRFayqVtk (the original
+objective was to reimplement the solution describe in the video in Rust).
+
+This project uses SDL to display the creatures doing their things:
+Download SDL2-devel-2.*-VC.zip from http://www.libsdl.org/ (http???)
+Copy all *.lib file to {User Home}\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\x86_64-pc-windows-msvc\lib
+Copy SDL2.dll to the root of the project
