@@ -14,3 +14,4 @@ debuginfo-level = 1
 rand = "*"
 rayon = "*"
 crossterm = "*"
+sdl2 = "*"

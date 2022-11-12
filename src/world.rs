@@ -10,7 +10,7 @@ pub use crossterm::{
 };
 use rand::prelude::*;
 use rayon::prelude::*;
-use std::io::{stdout, Stdout, Write};
+use std::io::{stdout, Write};
 
 pub struct World {
     pub creatures: Vec<Creature>,
@@ -67,7 +67,7 @@ impl World {
         }
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, acrivate_kill: bool) {
         let (kills, moves, resp) = self
             .creatures
             .par_iter()
@@ -103,14 +103,17 @@ impl World {
                 },
             );
 
-        for kill in kills {
-            let i = self.position_to_grid_index(&kill);
-            if let Some(ix) = self.grid[i] {
-                self.creatures[ix].alive = false;
-                self.grid[i] = None;
+        if acrivate_kill {
+            for kill in kills {
+                let i = self.position_to_grid_index(&kill);
+                if let Some(ix) = self.grid[i] {
+                    self.creatures[ix].alive = false;
+                    self.grid[i] = None;
+                }
             }
         }
 
+        /*
         for (pos, r) in resp {
             let i = self.position_to_grid_index(&pos);
             if let Some(ix) = self.grid[i] {
@@ -118,7 +121,7 @@ impl World {
                     self.creatures[ix].responsiveness = r;
                 }
             }
-        }
+        }*/
 
         for (source, destination) in moves {
             let dst = self.position_to_grid_index(&destination);
@@ -180,10 +183,23 @@ impl World {
         };
         let maxy = usize::min(self.height - 1, position.y as usize + radius);
 
+        let mut count = 0;
+        for x in minx..maxx {
+            for y in miny..maxy {
+                if self.grid[self.get_grid_index(x, y)].is_some() {
+                    count += 1;
+                }
+            }
+        }
+
+        count
+
+        /*
         (minx..maxx)
-            .zip(miny..maxy)
+        .zip(miny..maxy)
             .filter(|(x, y)| self.grid[self.get_grid_index(*x, *y)].is_some())
             .count()
+        */
     }
 
     pub fn distance_next_creature(
