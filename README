@@ -18,7 +18,7 @@ some commented out code. Possibly the entire approach is not correct, but we
 are doing this for fun. 
 
 Strongly inspired by https://www.youtube.com/watch?v=N3tRFayqVtk (the original
-objective was to reimplement the solution describe in the video in Rust).
+objective was to rewrite in Rust the solution shown in the video).
 
 This project uses SDL to display the creatures doing their things:
 Download SDL2-devel-2.*-VC.zip from http://www.libsdl.org/ (http???)
