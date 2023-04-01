@@ -1,6 +1,6 @@
 use rand::prelude::*;
-use std::thread;
 use std::time::Duration;
+use std::{thread, time::Instant};
 
 mod creature;
 use creature::*;
@@ -41,20 +41,24 @@ fn main() {
 
     let mut world = World::new(creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
     let (mut canvas, mut event_pump) = create_canvas().unwrap();
+    let mut cn = vec![];
 
-    for generation in 0..100000 {
+    for generation in 0..10 {
+        let zzz = Instant::now();
         event_pump.poll_event();
 
-        for _ in 0..600 {
-            if generation % 50 == 0 {
+        for _ in 0..1000 {
+            /*if generation % 50 == 0 {
                 event_pump.poll_event();
                 display(&world, &mut canvas);
                 thread::sleep(Duration::from_millis(10));
                 //world.display();
-            }
-            world.step(generation > 200);
+            }*/
+            world.step(generation > 2000);
         }
-
+        cn.push(zzz.elapsed().as_micros());
+        println!("It took {}µs to do steps", zzz.elapsed().as_micros());
+        
         if generation % 50 == 0 {
             display_survival(&mut canvas);
         }
@@ -107,6 +111,9 @@ fn main() {
 
         world = World::new(new_creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
     }
+
+    let avg: u128 = cn.iter().sum::<u128>() / cn.len() as u128;
+    println!("Avg: {avg}µs");
 }
 
 fn survive(position: &Position) -> bool {
