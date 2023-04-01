@@ -12,15 +12,19 @@ use rand::prelude::*;
 use rayon::prelude::*;
 use std::io::{stdout, Write};
 
-pub struct World {
-    pub creatures: Vec<Creature>,
+pub struct World<const CHROMOSOME_COUNT: usize> {
+    pub creatures: Vec<Creature<CHROMOSOME_COUNT>>,
     grid: Vec<Option<usize>>,
-    pub width: usize,
-    pub height: usize,
-    pub age: usize,
+    width: usize,
+    height: usize,
+    age: usize,
+
+    pub height_f: f64,
+    pub width_f: f64,
+    pub age_f: f64,
 }
 
-impl World {
+impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
     pub fn display(&self) {
         let mut console = stdout();
         for x in 0..self.width {
@@ -38,7 +42,7 @@ impl World {
         console.flush();
     }
 
-    pub fn new(mut creatures: Vec<Creature>, height: usize, width: usize) -> World {
+    pub fn new(mut creatures: Vec<Creature<CHROMOSOME_COUNT>>, height: usize, width: usize) -> World<CHROMOSOME_COUNT> {
         let mut rng = rand::thread_rng();
         let size = width * height;
 
@@ -64,6 +68,9 @@ impl World {
             width,
             height,
             age: 0,
+            age_f: 0.,
+            width_f: width as f64,
+            height_f: height as f64,
         }
     }
 
@@ -77,6 +84,7 @@ impl World {
             .flatten()
             .fold(
                 || (vec![], vec![], vec![]),
+                //(vec![], vec![], vec![]),
                 |(mut kills, mut moves, mut resp), item| match item {
                     ActionResult::Move(src, dst) => {
                         moves.push((src, dst));
@@ -139,6 +147,7 @@ impl World {
         }
 
         self.age += 1;
+        self.age_f = self.age as f64;
     }
 
     #[inline]

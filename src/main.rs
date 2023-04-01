@@ -1,6 +1,6 @@
 use rand::prelude::*;
-use std::thread;
 use std::time::Duration;
+use std::{thread, time::Instant};
 
 mod creature;
 use creature::*;
@@ -36,41 +36,53 @@ fn main() {
         .map(|_| thread_rng().gen::<u32>())
         .collect::<Vec<_>>()
         .chunks(GENOME_SIZE)
-        .map(|c| Creature::from_chromosomes(c.to_vec(), INTERNAL_NEURONS_COUNT))
+        .map(|c| Creature::<GENOME_SIZE>::from_chromosomes(c.try_into().unwrap(), INTERNAL_NEURONS_COUNT))
         .collect::<Vec<_>>();
 
     let mut world = World::new(creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
     let (mut canvas, mut event_pump) = create_canvas().unwrap();
+    let mut cn = vec![];
 
-    for generation in 0..100000 {
+    for generation in 0..1000 {
+        let zzz = Instant::now();
         event_pump.poll_event();
 
-        for _ in 0..600 {
+        for _ in 0..1000 {
+            /*
             if generation % 50 == 0 {
                 event_pump.poll_event();
                 display(&world, &mut canvas);
                 thread::sleep(Duration::from_millis(10));
                 //world.display();
-            }
-            world.step(generation > 200);
+            } */
+            world.step(generation > 2000);
         }
+        cn.push(zzz.elapsed().as_micros());
+        println!("It took {}µs to do steps", zzz.elapsed().as_micros());
 
         if generation % 50 == 0 {
             display_survival(&mut canvas);
         }
 
-        let killed = world.creatures.iter().filter(|c| !c.alive).count();
-        let filtered = world
-            .creatures
-            .iter()
-            .filter(|c| c.alive && !survive(&c.position))
-            .count();
-        let survived = world
-            .creatures
-            .iter()
-            .filter(|c| c.alive && survive(&c.position))
-            .collect::<Vec<_>>();
+        let s1 = Instant::now();
 
+        let (killed, filtered, survived) =
+            world
+                .creatures
+                .iter()
+                .fold((0, 0, vec![]), |(k, f, mut s), c| {
+                    if !c.alive {
+                        (k + 1, f, s)
+                    } else if survive(&c.position) {
+                        s.push(c);
+                        (k, f, s)
+                    } else {
+                        (k, f + 1, s)
+                    }
+                });
+        //println!("It took {}µs to do things", s1.elapsed().as_micros());
+
+        let s1 = Instant::now();
         println!(
             "{}: {} survived ({} killed, {} filtered)",
             generation,
@@ -78,7 +90,9 @@ fn main() {
             killed,
             filtered
         );
+        //println!("It took {}µs", s1.elapsed().as_micros());
 
+        let s1 = Instant::now();
         let new_creatures = (0..CREATURE_COUNT)
             .map(|_| {
                 (
@@ -88,25 +102,37 @@ fn main() {
             })
             .map(|(p1, p2)| survived[p1].reproduce(survived[p2]))
             .collect::<Vec<_>>();
+        //println!("It took {}µs to reproduce", s1.elapsed().as_micros());
 
-        if survived.len() > CREATURE_COUNT * 99 / 100 {
-            for i in survived.iter().take(10) {
-                println!("==================================================");
-                println!("{:#?}", i);
-                println!("==================================================");
-                println!("{:#?}", i.neurons);
-                println!("==================================================");
-                println!("{:#?}", i.connections);
-                println!("==================================================");
-                println!("==================================================");
-                println!("==================================================");
-                println!("==================================================");
-                println!("==================================================");
-            }
-        }
+        //if survived.len() > CREATURE_COUNT * 99 / 100 {
+        //    for i in survived.iter().take(10) {
+        //        println!("==================================================");
+        //        println!("{:#?}", i);
+        //        println!("==================================================");
+        //        println!("{:#?}", i.neurons);
+        //        println!("==================================================");
+        //        println!("{:#?}", i.connections);
+        //        println!("==================================================");
+        //        println!("==================================================");
+        //        println!("==================================================");
+        //        println!("==================================================");
+        //        println!("==================================================");
+        //    }
+        //}
 
+        let s1 = Instant::now();
         world = World::new(new_creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
+        //println!("It took {}µs to create world", s1.elapsed().as_micros());
+        //println!("It took {}µs to everything", zzz.elapsed().as_micros());
     }
+
+    let avg: u128 = cn.iter().sum::<u128>() / cn.len() as u128;
+    println!("Avg: {avg}µs");
+
+    //398878µs
+    //393879µs
+
+    //402898µs
 }
 
 fn survive(position: &Position) -> bool {
@@ -160,7 +186,7 @@ fn create_canvas() -> Option<(Canvas<Window>, EventPump)> {
     Some((canvas, sdl_event_pump))
 }
 
-fn display(world: &World, canvas: &mut Canvas<Window>) {
+fn display(world: &World<GENOME_SIZE>, canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::BLACK);
     canvas.clear();
     canvas.set_draw_color(Color::WHITE);

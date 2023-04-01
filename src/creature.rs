@@ -4,20 +4,23 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[derive(Debug)]
-pub struct Creature {
+const CHROMOSOME_LIMIT: usize = 200;
+const NEURON_LIMIT: usize = CHROMOSOME_LIMIT * 2;
+
+#[derive(Debug, Clone)]
+pub struct Creature<const CHROMOSOME_COUNT: usize> {
     last_move: Option<Direction>,
     pub position: Position,
     pub neurons: Vec<Neuron>,
     pub connections: Vec<(usize, usize, f64)>,
     pub alive: bool,
-    chromosomes: Vec<u32>,
+    chromosomes: [u32; CHROMOSOME_COUNT],
     internal_neurons_count: u8,
     pub responsiveness: Arc<Mutex<f64>>,
     pub oscillator_frequency: Arc<Mutex<f64>>,
 }
 
-impl Creature {
+impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
     fn flip_random_bit(chromosome: u32) -> u32 {
         let p = thread_rng().gen::<f64>();
 
@@ -34,9 +37,9 @@ impl Creature {
         }
     }
 
-    pub fn reproduce(&self, partner: &Creature) -> Creature {
-        let mut chromosomes = vec![];
-        for (c1, c2) in self.chromosomes.iter().zip(partner.chromosomes.iter()) {
+    pub fn reproduce(&self, partner: &Creature<CHROMOSOME_COUNT>) -> Creature<CHROMOSOME_COUNT> {
+        let mut chromosomes = [0; CHROMOSOME_COUNT];
+        for (i, (c1, c2)) in self.chromosomes.iter().zip(partner.chromosomes.iter()).enumerate() {
             let c = if thread_rng().gen::<u8>() % 2 == 0 {
                 *c1
             } else {
@@ -45,12 +48,12 @@ impl Creature {
 
             //let mc = if thread_rng().gen::<u8>() <= 2 {
             let mc = if thread_rng().gen::<f32>() <= 0.001 {
-                Creature::flip_random_bit(c)
+                Creature::<CHROMOSOME_COUNT>::flip_random_bit(c)
             } else {
                 c
             };
 
-            chromosomes.push(mc);
+            chromosomes[i] = mc;
         }
 
         Creature::from_chromosomes(chromosomes, self.internal_neurons_count)
@@ -66,7 +69,11 @@ impl Creature {
         chromosome >> 16 & 0xFF
     }
 
-    pub fn from_chromosomes(mut chromosomes: Vec<u32>, internal_neurons_count: u8) -> Creature {
+    pub fn from_chromosomes(mut chromosomes: [u32; CHROMOSOME_COUNT], internal_neurons_count: u8) -> Creature<CHROMOSOME_COUNT> {
+        if CHROMOSOME_COUNT > CHROMOSOME_LIMIT {
+            panic!("Limit the number of chromosomes to {CHROMOSOME_LIMIT} for performance reasons (once generic_const_exprs is stabilized, we'll re-evaluate)")
+        }
+
         chromosomes.sort();
 
         let pruned_chromosomes = chromosomes
@@ -74,8 +81,8 @@ impl Creature {
             .filter(|c| {
                 *c & 0x00800000 > 0
                     || chromosomes.iter().any(|d| {
-                        Creature::output_neuron(c) == Creature::input_neuron(d)
-                            && Creature::input_neuron(d) != Creature::output_neuron(d)
+                        Creature::<CHROMOSOME_COUNT>::output_neuron(c) == Creature::<CHROMOSOME_COUNT>::input_neuron(d)
+                            && Creature::<CHROMOSOME_COUNT>::input_neuron(d) != Creature::<CHROMOSOME_COUNT>::output_neuron(d)
                     })
             })
             .map(|c| *c)
@@ -192,8 +199,8 @@ impl Creature {
         self.position = position;
     }
 
-    pub fn act(&self, world: &World) -> Vec<ActionResult> {
-        let mut add = vec![0.; self.neurons.len()];
+    pub fn act(&self, world: &World<CHROMOSOME_COUNT>) -> Vec<ActionResult> {
+        let mut add = [0.; NEURON_LIMIT];
 
         for connection in self.connections.iter() {
             //let neuron = unsafe { *connection.0 };
@@ -201,128 +208,65 @@ impl Creature {
 
             add[connection.1] += match &neuron {
                 Neuron::Sensor(s) => self.get_sensor(s, world) * connection.2,
-                Neuron::Internal(_) => neuron.activate(add[connection.0]) * connection.2,
+                n@ Neuron::Internal(_) => n.activate(add[connection.0]) * connection.2,
                 Neuron::Action(_) => unreachable!(),
             }
         }
-
-        let xxxxx = add.into_iter().zip(&self.neurons).filter_map(|(add, n)| {
-            if let Neuron::Action(a) = n {
-                Some((n.activate(add), a))
-            } else {
-                None
-            }
-        });
 
         let mut move_x = 0.;
         let mut move_y = 0.;
         let mut kill = 0.;
         let mut responsiveness = None;
         let mut new_freq = None;
-        for (intensity, action) in xxxxx {
-            match action {
-                ActionType::Move(d) => {
-                    move_x += d.x() * intensity;
-                    move_y += d.y() * intensity;
-                }
-                ActionType::MoveForward if self.last_move.is_some() => {
-                    move_x += self.last_move.as_ref().unwrap().x() * intensity;
-                    move_y += self.last_move.as_ref().unwrap().y() * intensity;
-                }
-                ActionType::Kill if self.last_move.is_some() => kill += intensity,
-                ActionType::MoveLeft if self.last_move.is_some() => {
-                    let rotated = self.last_move.as_ref().unwrap().left();
 
-                    move_x += rotated.x() * intensity;
-                    move_y += rotated.y() * intensity;
-                }
-                ActionType::MoveRight if self.last_move.is_some() => {
-                    let rotated = self.last_move.as_ref().unwrap().right();
 
-                    move_x += rotated.x() * intensity;
-                    move_y += rotated.y() * intensity;
-                }
-                ActionType::MoveRandom => {
-                    let mv = Direction::random();
-
-                    move_x += mv.x() * intensity;
-                    move_x += mv.y() * intensity;
-                }
-                ActionType::SetResponsiveness => {
-                    responsiveness = Some((intensity.tanh() + 1.) / 2.);
-                }
-                ActionType::SetOscillator => {
-                    new_freq = Some(intensity.tanh() + 1.);
-                }
-                ActionType::MoveForward
-                | ActionType::Kill
-                | ActionType::MoveLeft
-                | ActionType::MoveRight => {}
-            }
-        }
-        /*
-        let (kill, x, y, responsiveness) = xxxxx
-            .into_iter()
-            .fold(
-                (0., 0., 0., None),
-                |(kill, move_x, move_y, responsiveness), (intensity, action)| match action {
-                    ActionType::Move(d) => (
-                        kill,
-                        move_x + d.x() * intensity,
-                        move_y + d.y() * intensity,
-                        responsiveness,
-                    ),
-                    ActionType::MoveForward if self.last_move.is_some() => (
-                        kill,
-                        move_x + self.last_move.as_ref().unwrap().x() * intensity,
-                        move_y + self.last_move.as_ref().unwrap().y() * intensity,
-                        responsiveness,
-                    ),
-                    ActionType::Kill if self.last_move.is_some() => {
-                        (kill + intensity, move_x, move_y, responsiveness)
+        for i in 0..self.neurons.len() {
+            if let Neuron::Action(action) = &self.neurons[i] {
+                let intensity = self.neurons[i].activate(add[i]);
+                match action {
+                    ActionType::Move(d) => {
+                        move_x += d.x() * intensity;
+                        move_y += d.y() * intensity;
                     }
+                    ActionType::MoveForward if self.last_move.is_some() => {
+                        move_x += self.last_move.as_ref().unwrap().x() * intensity;
+                        move_y += self.last_move.as_ref().unwrap().y() * intensity;
+                    }
+                    ActionType::Kill if self.last_move.is_some() => kill += intensity,
                     ActionType::MoveLeft if self.last_move.is_some() => {
                         let rotated = self.last_move.as_ref().unwrap().left();
-
-                        (
-                            kill,
-                            move_x + rotated.x() * intensity,
-                            move_y + rotated.y() * intensity,
-                            responsiveness,
-                        )
+    
+                        move_x += rotated.x() * intensity;
+                        move_y += rotated.y() * intensity;
                     }
                     ActionType::MoveRight if self.last_move.is_some() => {
                         let rotated = self.last_move.as_ref().unwrap().right();
-
-                        (
-                            kill,
-                            move_x + rotated.x() * intensity,
-                            move_y + rotated.y() * intensity,
-                            responsiveness,
-                        )
+    
+                        move_x += rotated.x() * intensity;
+                        move_y += rotated.y() * intensity;
                     }
                     ActionType::MoveRandom => {
                         let mv = Direction::random();
-
-                        (
-                            kill,
-                            mv.x() * intensity,
-                            mv.y() * intensity,
-                            responsiveness,
-                        )
+    
+                        move_x += mv.x() * intensity;
+                        move_x += mv.y() * intensity;
                     }
                     ActionType::SetResponsiveness => {
-                        (kill, move_x, move_y, Some((intensity.tanh() + 1.) / 2.))
+                        responsiveness = Some((logistic_thing(intensity) + 1.) / 2.);
+                    }
+                    ActionType::SetOscillator => {
+                        new_freq = Some(logistic_thing(intensity) + 1.);
                     }
                     ActionType::MoveForward
                     | ActionType::Kill
                     | ActionType::MoveLeft
-                    | ActionType::MoveRight => (kill, move_x, move_y, responsiveness),
-                },
-            );*/
+                    | ActionType::MoveRight => {}
+                }
+            }
+        }
 
         let mut resp = self.responsiveness.lock().unwrap();
-        let (normalized_kill, px, py) = (kill.tanh(), move_x.tanh() * *resp, move_y.tanh() * *resp);
+        let (normalized_kill, px, py) = (logistic_thing(kill), logistic_thing(move_x) * *resp, logistic_thing(move_y) * *resp);
 
         if let Some(r) = responsiveness {
             *resp = r;
@@ -363,22 +307,22 @@ impl Creature {
         results
     }
 
-    fn get_sensor(&self, sensor_type: &SensorType, world: &World) -> f64 {
+    fn get_sensor(&self, sensor_type: &SensorType, world: &World<CHROMOSOME_COUNT>) -> f64 {
         match sensor_type {
-            SensorType::Age => (world.age as f64 - 125.) / 125.,
-            SensorType::NorthBoundaryDistance => 1. - self.position.y as f64 / world.height as f64,
-            SensorType::EastBoundaryDistance => 1. - self.position.x as f64 / world.width as f64,
-            SensorType::SouthBoundaryDistance => self.position.y as f64 / world.height as f64,
-            SensorType::WestBoundaryDistance => self.position.x as f64 / world.width as f64,
+            SensorType::Age => (world.age_f - 125.) / 125.,
+            SensorType::NorthBoundaryDistance => 1. - self.position.y as f64 / world.height_f,
+            SensorType::EastBoundaryDistance => 1. - self.position.x as f64 / world.width_f,
+            SensorType::SouthBoundaryDistance => self.position.y as f64 / world.height_f,
+            SensorType::WestBoundaryDistance => self.position.x as f64 / world.width_f,
             SensorType::Density => world.get_neighborhood(&self.position, 3) as f64 / 8.,
             SensorType::Random => thread_rng().gen::<f64>(),
             SensorType::Barrier => 0.,
             SensorType::Oscillator => {
-                (*self.oscillator_frequency.lock().unwrap() * world.age as f64 / 10.).sin()
+                (*self.oscillator_frequency.lock().unwrap() * world.age_f / 10.).sin()
             }
             SensorType::DistanceCreatureForward => match self.last_move {
                 Some(m) => {
-                    (world.distance_next_creature(&self.position, &m, 20) as f64 - 20.).tanh()
+                    logistic_thing(world.distance_next_creature(&self.position, &m, 20) as f64 - 20.)
                 }
                 None => 0.,
             },
@@ -393,7 +337,7 @@ pub enum ActionResult {
     SetResponsiveness(Position, f64),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Neuron {
     Sensor(SensorType),
     Internal(u8),
@@ -403,11 +347,11 @@ pub enum Neuron {
 impl Neuron {
     #[inline]
     fn activate(&self, input: f64) -> f64 {
-        input.tanh()
+        logistic_thing(input)
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SensorType {
     Age,
     NorthBoundaryDistance,
@@ -439,7 +383,7 @@ impl From<u8> for SensorType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum ActionType {
     Move(Direction),
     MoveForward,
@@ -657,6 +601,11 @@ impl Add<[i16; 2]> for &Position {
     }
 }
 
+#[inline]
+fn logistic_thing(n: f64) -> f64 {
+    n / (1. + n.abs())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -666,7 +615,7 @@ mod tests {
         let c1 = 0x8080FF00u32;
         let c2 = 0x808100FFu32;
 
-        let creature = Creature::from_chromosomes(vec![c1, c2], 1);
+        let creature = Creature::from_chromosomes([c1, c2], 1);
 
         assert_eq!(creature.neurons.len(), 3);
         match (&creature.neurons[0], &creature.neurons[1]) {
@@ -686,7 +635,7 @@ mod tests {
         let c1 = 0x8080FF00u32;
         let c2 = 0x808000FFu32;
 
-        let creature = Creature::from_chromosomes(vec![c1, c2], 1);
+        let creature = Creature::from_chromosomes([c1, c2], 1);
 
         assert_eq!(creature.neurons.len(), 2);
         match (&creature.neurons[0], &creature.neurons[1]) {
@@ -705,7 +654,7 @@ mod tests {
         let c1 = 0x8000FF00u32;
         let c2 = 0x008000FFu32;
 
-        let creature = Creature::from_chromosomes(vec![c1, c2], 1);
+        let creature = Creature::from_chromosomes([c1, c2], 1);
 
         assert_eq!(creature.neurons.len(), 3);
         match (&creature.neurons[0], &creature.neurons[1]) {
@@ -728,7 +677,7 @@ mod tests {
         let c1 = 0x8000FF00u32;
         let c2 = 0x808000FFu32;
 
-        let creature = Creature::from_chromosomes(vec![c1, c2], 1);
+        let creature = Creature::from_chromosomes([c1, c2], 1);
 
         assert_eq!(creature.neurons.len(), 2);
         match (&creature.neurons[0], &creature.neurons[1]) {
@@ -748,7 +697,7 @@ mod tests {
         let c2 = 0x808000FFu32;
         let c3 = 0x0000FF00u32;
 
-        let creature = Creature::from_chromosomes(vec![c1, c2, c3], 1);
+        let creature = Creature::from_chromosomes([c1, c2, c3], 1);
 
         assert_eq!(creature.neurons.len(), 2);
         match (&creature.neurons[0], &creature.neurons[1]) {
@@ -764,7 +713,7 @@ mod tests {
 
     #[test]
     fn xxx() {
-        let chromosomes: Vec<u32> = vec![
+        let chromosomes = [
             0x04F29154, //83005780,
             0x174C423B, //390873659,
             0x25CE2378, //634266488,
