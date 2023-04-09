@@ -4,7 +4,7 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-const CHROMOSOME_LIMIT: usize = 200;
+const CHROMOSOME_LIMIT: usize = 50;
 const NEURON_LIMIT: usize = CHROMOSOME_LIMIT * 2;
 
 #[derive(Debug, Clone)]
@@ -16,8 +16,8 @@ pub struct Creature<const CHROMOSOME_COUNT: usize> {
     pub alive: bool,
     chromosomes: [u32; CHROMOSOME_COUNT],
     internal_neurons_count: u8,
-    pub responsiveness: Arc<Mutex<f64>>,
-    pub oscillator_frequency: Arc<Mutex<f64>>,
+    pub responsiveness: f64,
+    pub oscillator_frequency: f64,
 }
 
 impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
@@ -176,8 +176,8 @@ impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
             alive: true,
             chromosomes,
             internal_neurons_count,
-            responsiveness: Arc::new(Mutex::new(0.5)),
-            oscillator_frequency: Arc::new(Mutex::new(1.)),
+            responsiveness: 0.5,
+            oscillator_frequency: 1.,
         }
     }
 
@@ -199,7 +199,7 @@ impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
         self.position = position;
     }
 
-    pub fn act(&self, world: &World<CHROMOSOME_COUNT>) -> Vec<ActionResult> {
+    pub fn act(&mut self, world: &World<CHROMOSOME_COUNT>) -> Vec<ActionResult> {
         let mut add = [0.; NEURON_LIMIT];
 
         for connection in self.connections.iter() {
@@ -265,15 +265,14 @@ impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
             }
         }
 
-        let mut resp = self.responsiveness.lock().unwrap();
-        let (normalized_kill, px, py) = (logistic_thing(kill), logistic_thing(move_x) * *resp, logistic_thing(move_y) * *resp);
+        let (normalized_kill, px, py) = (logistic_thing(kill), logistic_thing(move_x) * self.responsiveness, logistic_thing(move_y) * self.responsiveness);
 
         if let Some(r) = responsiveness {
-            *resp = r;
+            self.responsiveness = r;
         }
 
         if let Some(s) = new_freq {
-            *self.oscillator_frequency.lock().unwrap() = s;
+            self.oscillator_frequency = s;
         }
 
         let mut results = vec![];
@@ -318,7 +317,7 @@ impl<const CHROMOSOME_COUNT: usize> Creature<CHROMOSOME_COUNT> {
             SensorType::Random => thread_rng().gen::<f64>(),
             SensorType::Barrier => 0.,
             SensorType::Oscillator => {
-                (*self.oscillator_frequency.lock().unwrap() * world.age_f / 10.).sin()
+                (self.oscillator_frequency * world.age_f / 10.).sin()
             }
             SensorType::DistanceCreatureForward => match self.last_move {
                 Some(m) => {
