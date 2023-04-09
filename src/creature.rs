@@ -4,7 +4,7 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-const CHROMOSOME_LIMIT: usize = 200;
+const CHROMOSOME_LIMIT: usize = 50;
 const NEURON_LIMIT: usize = CHROMOSOME_LIMIT * 2;
 
 #[derive(Debug, Clone)]

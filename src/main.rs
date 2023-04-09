@@ -43,7 +43,7 @@ fn main() {
     let (mut canvas, mut event_pump) = create_canvas().unwrap();
     let mut cn = vec![];
 
-    for generation in 0..1000 {
+    for generation in 0..20 {
         let zzz = Instant::now();
         event_pump.poll_event();
 
