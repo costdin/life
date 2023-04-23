@@ -44,21 +44,21 @@ fn main() {
     let (mut canvas, mut event_pump) = create_canvas().unwrap();
     let mut cn = vec![];
 
-    for generation in 0..20 {
+    for generation in 0..2000 {
         let zzz = Instant::now();
         event_pump.poll_event();
 
         for _ in 0..1000 {
 
-            /*
+            
             if generation % 50 == 0 {
                 event_pump.poll_event();
-                display(&world, &mut canvas);
-                thread::sleep(Duration::from_millis(10));
+                display(&world, &creatures, &mut canvas);
+                thread::sleep(Duration::from_millis(1));
                 //world.display();
             }
-            */
-            world.step(&mut creatures, generation > 2000);
+            
+            world.step(&mut creatures, true);
         }
         cn.push(zzz.elapsed().as_micros());
         println!("It took {}µs to do steps", zzz.elapsed().as_micros());

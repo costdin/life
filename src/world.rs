@@ -74,14 +74,14 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
 
     pub fn step(&mut self, creatures: &mut Vec<Creature<CHROMOSOME_COUNT>>, activate_kill: bool) {
         let (kills, moves, resp) = creatures
-            //.par_iter()
-            .iter_mut()
+            .par_iter_mut()
+            //.iter_mut()
             .filter(|c| c.alive)
             .map(|c| c.act(self))
             .flatten()
             .fold(
-                //|| (vec![], vec![], vec![]),
-                (vec![], vec![], vec![]),
+                || (vec![], vec![], vec![]),
+                //(vec![], vec![], vec![]),
                 |(mut kills, mut moves, mut resp), item| match item {
                     ActionResult::Move(src, dst) => {
                         moves.push((src, dst));
@@ -96,8 +96,8 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
                         (kills, moves, resp)
                     }
                 },
-            );
-/*            .reduce(
+            )
+            .reduce(
                 || (vec![], vec![], vec![]),
                 |(mut kills, mut moves, mut resp), (k, m, r)| {
                     kills.extend_from_slice(&k);
@@ -106,7 +106,7 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
 
                     (kills, moves, resp)
                 },
-            );*/
+            );
 
         if activate_kill {
             for kill in kills {
