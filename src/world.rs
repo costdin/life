@@ -13,7 +13,6 @@ use rayon::prelude::*;
 use std::io::{stdout, Write};
 
 pub struct World<const CHROMOSOME_COUNT: usize> {
-    pub creatures: Vec<Creature<CHROMOSOME_COUNT>>,
     grid: Vec<Option<usize>>,
     width: usize,
     height: usize,
@@ -25,7 +24,7 @@ pub struct World<const CHROMOSOME_COUNT: usize> {
 }
 
 impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
-    pub fn display(&self) {
+    pub fn display(&self, creatures: &[Creature<CHROMOSOME_COUNT>]) {
         let mut console = stdout();
         for x in 0..self.width {
             for y in 0..self.height {
@@ -34,7 +33,7 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
             }
         }
 
-        for c in self.creatures.iter() {
+        for c in creatures.iter() {
             console.queue(cursor::MoveTo(c.position.x as u16, c.position.y as u16));
             console.queue(PrintStyledContent(style("*")));
         }
@@ -42,7 +41,7 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
         console.flush();
     }
 
-    pub fn new(mut creatures: Vec<Creature<CHROMOSOME_COUNT>>, height: usize, width: usize) -> World<CHROMOSOME_COUNT> {
+    pub fn new(creatures: &mut Vec<Creature<CHROMOSOME_COUNT>>, height: usize, width: usize) -> World<CHROMOSOME_COUNT> {
         let mut rng = rand::thread_rng();
         let size = width * height;
 
@@ -63,7 +62,6 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
         }
 
         World {
-            creatures,
             grid,
             width,
             height,
@@ -74,17 +72,16 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
         }
     }
 
-    pub fn step(&mut self, activate_kill: bool) {
-        let (kills, moves, resp) = self
-            .creatures
-            //.par_iter()
-            .iter()
+    pub fn step(&mut self, creatures: &mut Vec<Creature<CHROMOSOME_COUNT>>, activate_kill: bool) {
+        let (kills, moves, resp) = creatures
+            .par_iter_mut()
+            //.iter_mut()
             .filter(|c| c.alive)
             .map(|c| c.act(self))
             .flatten()
             .fold(
-                //|| (vec![], vec![], vec![]),
-                (vec![], vec![], vec![]),
+                || (vec![], vec![], vec![]),
+                //(vec![], vec![], vec![]),
                 |(mut kills, mut moves, mut resp), item| match item {
                     ActionResult::Move(src, dst) => {
                         moves.push((src, dst));
@@ -99,8 +96,8 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
                         (kills, moves, resp)
                     }
                 },
-            );
-/*            .reduce(
+            )
+            .reduce(
                 || (vec![], vec![], vec![]),
                 |(mut kills, mut moves, mut resp), (k, m, r)| {
                     kills.extend_from_slice(&k);
@@ -109,13 +106,13 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
 
                     (kills, moves, resp)
                 },
-            );*/
+            );
 
         if activate_kill {
             for kill in kills {
                 let i = self.position_to_grid_index(&kill);
                 if let Some(ix) = self.grid[i] {
-                    self.creatures[ix].alive = false;
+                    creatures[ix].alive = false;
                     self.grid[i] = None;
                 }
             }
@@ -137,10 +134,10 @@ impl<const CHROMOSOME_COUNT: usize> World<CHROMOSOME_COUNT> {
                 let src = self.position_to_grid_index(&source);
 
                 if let Some(ix) = self.grid[src] {
-                    if self.creatures[ix].alive {
+                    if creatures[ix].alive {
                         self.grid[src] = None;
                         self.grid[dst] = Some(ix);
-                        self.creatures[ix].set_position(destination);
+                        creatures[ix].set_position(destination);
                     }
                 }
             }

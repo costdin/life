@@ -1,4 +1,5 @@
 use rand::prelude::*;
+use sdl2::libc::creat;
 use std::time::Duration;
 use std::{thread, time::Instant};
 
@@ -32,32 +33,32 @@ fn main() {
     }
     */
 
-    let creatures = (0..CREATURE_COUNT * GENOME_SIZE)
+    let mut creatures = (0..CREATURE_COUNT * GENOME_SIZE)
         .map(|_| thread_rng().gen::<u32>())
         .collect::<Vec<_>>()
         .chunks(GENOME_SIZE)
         .map(|c| Creature::<GENOME_SIZE>::from_chromosomes(c.try_into().unwrap(), INTERNAL_NEURONS_COUNT))
         .collect::<Vec<_>>();
 
-    let mut world = World::new(creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
+    let mut world = World::new(&mut creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
     let (mut canvas, mut event_pump) = create_canvas().unwrap();
     let mut cn = vec![];
 
-    for generation in 0..20 {
+    for generation in 0..2000 {
         let zzz = Instant::now();
         event_pump.poll_event();
 
         for _ in 0..1000 {
 
-            /*
+            
             if generation % 50 == 0 {
                 event_pump.poll_event();
-                display(&world, &mut canvas);
-                thread::sleep(Duration::from_millis(10));
+                display(&world, &creatures, &mut canvas);
+                thread::sleep(Duration::from_millis(1));
                 //world.display();
             }
-            */
-            world.step(generation > 2000);
+            
+            world.step(&mut creatures, true);
         }
         cn.push(zzz.elapsed().as_micros());
         println!("It took {}µs to do steps", zzz.elapsed().as_micros());
@@ -68,8 +69,7 @@ fn main() {
         let s1 = Instant::now();
 
         let (killed, filtered, survived) =
-            world
-                .creatures
+            creatures
                 .iter()
                 .fold((0, 0, vec![]), |(k, f, mut s), c| {
                     if !c.alive {
@@ -94,7 +94,7 @@ fn main() {
         //println!("It took {}µs", s1.elapsed().as_micros());
 
         let s1 = Instant::now();
-        let new_creatures = (0..CREATURE_COUNT)
+        creatures = (0..CREATURE_COUNT)
             .map(|_| {
                 (
                     thread_rng().gen::<u32>() as usize % survived.len(),
@@ -122,7 +122,7 @@ fn main() {
         //}
 
         let s1 = Instant::now();
-        world = World::new(new_creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
+        world = World::new(&mut creatures, BOX_HEIGHT as usize, BOX_WIDTH as usize);
         //println!("It took {}µs to create world", s1.elapsed().as_micros());
         //println!("It took {}µs to everything", zzz.elapsed().as_micros());
     }
@@ -182,7 +182,7 @@ fn create_canvas() -> Option<(Canvas<Window>, EventPump)> {
     Some((canvas, sdl_event_pump))
 }
 
-fn display(world: &World<GENOME_SIZE>, canvas: &mut Canvas<Window>) {
+fn display(world: &World<GENOME_SIZE>, creatures: &[Creature<GENOME_SIZE>], canvas: &mut Canvas<Window>) {
     canvas.set_draw_color(Color::BLACK);
     canvas.clear();
     canvas.set_draw_color(Color::WHITE);
@@ -190,7 +190,7 @@ fn display(world: &World<GENOME_SIZE>, canvas: &mut Canvas<Window>) {
     let mut killers: Vec<sdl2::rect::Point> = vec![];
     let mut others: Vec<sdl2::rect::Point> = vec![];
 
-    for c in world.creatures.iter().filter(|c| c.alive) {
+    for c in creatures.iter().filter(|c| c.alive) {
         if c.neurons
             .iter()
             .any(|n| matches!(n, Neuron::Action(ActionType::Kill)))
